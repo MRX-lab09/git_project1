@@ -2,379 +2,544 @@ import sys
 import random
 import pyperclip
 from PyQt6 import QtWidgets
-from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QMessageBox, \
-    QLineEdit, QSpinBox, QTableWidget, QTableWidgetItem
+from PyQt6.QtGui import QFont, QColor, QPalette
+from PyQt6.QtWidgets import (QApplication, QWidget, QPushButton, QVBoxLayout,
+                             QHBoxLayout, QLabel, QMessageBox, QLineEdit,
+                             QSpinBox, QTableWidget, QTableWidgetItem, QFrame)
 from PyQt6.QtCore import Qt
-import os  # Предоставляет функции для взаимодействия с операционной системой, такие как проверка существования файла и запуск файлов.
+import os
 import sqlite3
 
 
 class PasswordGeneratorApp(QWidget):
-    """
-    Этот класс представляет собой часть приложения, отвечающую за генерацию паролей.
-    Он позволяет пользователям указывать критерии пароля (длину, типы символов)
-    и генерировать случайный пароль на основе этих критериев.
-    """
-
     def __init__(self):
         super().__init__()
         self.init_ui()
 
     def init_ui(self):
         self.setWindowTitle("Генератор паролей")
-        self.setGeometry(400, 200, 800, 400)
+        self.setMinimumSize(400, 600)
 
-        # Создаем поле для отображения сгенерированного пароля.
-        self.password_display = QLineEdit(self)
+        # Стиль для приложения
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #2b2b2b;
+                color: #e0e0e0;
+                font-family: 'Segoe UI';
+            }
+            QLineEdit {
+                background-color: #3c3f41;
+                border: 1px solid #555;
+                border-radius: 4px;
+                padding: 8px;
+                font-size: 16px;
+                color: #e0e0e0;
+            }
+            QPushButton {
+                background-color: #3c3f41;
+                border: 1px solid #555;
+                border-radius: 4px;
+                padding: 10px;
+                min-width: 100px;
+                color: #e0e0e0;
+            }
+            QPushButton:hover {
+                background-color: #4e5254;
+                border: 1px solid #666;
+            }
+            QPushButton:pressed {
+                background-color: #2b2b2b;
+            }
+            QSpinBox {
+                background-color: #3c3f41;
+                border: 1px solid #555;
+                border-radius: 4px;
+                padding: 5px;
+                color: #e0e0e0;
+            }
+            QLabel {
+                font-size: 14px;
+                color: #bbbbbb;
+            }
+        """)
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
+
+        # Заголовок
+        title = QLabel("Генератор паролей")
+        title.setFont(QFont("Segoe UI", 26, QFont.Weight.Bold))
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet("color: #6d9eeb;")
+        main_layout.addWidget(title)
+
+        # Поле для пароля
+        self.password_display = QLineEdit()
         self.password_display.setReadOnly(True)
-        self.password_display.setFont(QFont("Arial", 20))
-        self.password_display.setPlaceholderText("Здесь появится пароль")
+        self.password_display.setFont(QFont("Consolas", 18))
+        self.password_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.password_display.setPlaceholderText("Ваш пароль появится здесь")
+        self.password_display.setStyleSheet("""
+            QLineEdit {
+                background-color: #3c3f41;
+                border: 2px solid #555;
+                border-radius: 8px;
+                padding: 12px;
+                font-size: 18px;
+                color: #6d9eeb;
+            }
+        """)
+        main_layout.addWidget(self.password_display)
 
-        # Создаем метку для поля ввода длины пароля.
-        length_label = QLabel("Длина пароля:", self)
-        length_label.setStyleSheet("QLabel { margin-top: 10px; }")
-        length_label.setFont(QFont("Arial", 20))
-        # Создаем спинбокс, чтобы пользователь мог указать длину пароля.
-        self.length_input = QSpinBox(self)
-        self.length_input.setValue(20)
-        self.length_input.setFont(QFont("Arial", 10))
-        self.length_input.setRange(6, 32)
+        # Настройки пароля
+        settings_frame = QFrame()
+        settings_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        settings_layout = QVBoxLayout(settings_frame)
+        settings_layout.setContentsMargins(15, 15, 15, 15)
+        settings_layout.setSpacing(15)
 
-        # Определяем общий стиль для кнопок, чтобы избежать повторения.
-        button_style = "QPushButton { padding: 15px; font-size: 16px; }"
+        # Длина пароля
+        length_layout = QHBoxLayout()
+        length_label = QLabel("Длина пароля:")
+        length_label.setFont(QFont("Segoe UI", 12))
+        self.length_input = QSpinBox()
+        self.length_input.setRange(6, 64)
+        self.length_input.setValue(16)
+        self.length_input.setFont(QFont("Segoe UI", 12))
+        length_layout.addWidget(length_label)
+        length_layout.addWidget(self.length_input)
+        settings_layout.addLayout(length_layout)
 
-        # Создаем кнопки для переключения различных типов символов в пароле.
-        self.uppercase_button = QPushButton("Заглавные буквы (A-Z)", self)
-        self.uppercase_button.clicked.connect(self.uppercase_toggle)
-        self.uppercase_button.setStyleSheet(
-            "background-color: lightblue; color: black;" + button_style)
+        # Кнопки выбора символов
+        self.uppercase_button = self.create_toggle_button("Заглавные буквы (A-Z)")
+        self.lowercase_button = self.create_toggle_button("Строчные буквы (a-z)")
+        self.digits_button = self.create_toggle_button("Цифры (0-9)")
+        self.special_button = self.create_toggle_button("Спецсимволы (!@#$%^&*)")
 
-        self.lowercase_button = QPushButton("Строчные буквы (a-z)", self)
-        self.lowercase_button.clicked.connect(self.lowercase_toggle)
-        self.lowercase_button.setStyleSheet("background-color: lightblue; color: black;" + button_style)
+        settings_layout.addWidget(self.uppercase_button)
+        settings_layout.addWidget(self.lowercase_button)
+        settings_layout.addWidget(self.digits_button)
+        settings_layout.addWidget(self.special_button)
 
-        self.digits_button = QPushButton("Цифры (0-9)", self)
-        self.digits_button.clicked.connect(self.digits_toggle)
-        self.digits_button.setStyleSheet("background-color: lightblue; color: black; " + button_style)
+        main_layout.addWidget(settings_frame)
 
-        self.special_button = QPushButton("Специальные символы (!@#$%^&*)", self)
-        self.special_button.clicked.connect(self.special_toggle)
-        self.special_button.setStyleSheet("background-color: lightblue; color: black; " + button_style)
+        # Поле для URL
+        self.url_input = QLineEdit()
+        self.url_input.setPlaceholderText("URL (необязательно)")
+        self.url_input.setFont(QFont("Segoe UI", 12))
+        main_layout.addWidget(self.url_input)
 
-        # Создаем кнопку для генерации пароля.
-        self.generate_button = QPushButton("Сгенерировать", self)
+        # Кнопки действий
+        buttons_layout = QHBoxLayout()
+        self.generate_button = QPushButton("Сгенерировать")
+        self.generate_button.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        self.generate_button.setStyleSheet("""
+            QPushButton {
+                background-color: #6d9eeb;
+                color: #ffffff;
+                padding: 12px;
+            }
+            QPushButton:hover {
+                background-color: #7daeff;
+            }
+        """)
         self.generate_button.clicked.connect(self.generate_password)
-        self.generate_button.setStyleSheet(button_style)
 
-        # Создаем кнопку для копирования сгенерированного пароля в буфер обмена.
-        self.copy_button = QPushButton("Скопировать", self)
+        self.copy_button = QPushButton("Копировать")
+        self.copy_button.setFont(QFont("Segoe UI", 12))
         self.copy_button.clicked.connect(self.copy_to_clipboard)
-        self.copy_button.setStyleSheet(button_style)
 
-        # Создаем поле для ввода URL, связанного с паролем (необязательно).
-        self.url_input = QLineEdit(self)
-        self.url_input.setPlaceholderText("URL...")
-        self.url_input.setFont(QFont("Arial", 12))
-        self.url_input.setStyleSheet(button_style)
+        buttons_layout.addWidget(self.generate_button)
+        buttons_layout.addWidget(self.copy_button)
+        main_layout.addLayout(buttons_layout)
 
-        # Создаем вертикальный макет для размещения виджетов.
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.password_display)
-        layout.addSpacing(10)
-        layout.addWidget(length_label)
-        layout.addWidget(self.length_input)
-        layout.addSpacing(10)
-        layout.addWidget(self.uppercase_button)
-        layout.addSpacing(10)
-        layout.addWidget(self.lowercase_button)
-        layout.addSpacing(10)
-        layout.addWidget(self.digits_button)
-        layout.addSpacing(10)
-        layout.addWidget(self.special_button)
-        layout.addSpacing(10)
-        layout.addWidget(self.url_input)
-        layout.addSpacing(10)
-        layout.addWidget(self.generate_button)
-        layout.addSpacing(10)
-        layout.addWidget(self.copy_button)
-        layout.addSpacing(40)
+        # Инициализация состояний
+        self.use_uppercase = True
+        self.use_lowercase = True
+        self.use_digits = True
+        self.use_special = True
+        self.update_button_styles()
 
-        self.setLayout(layout)  # макет для главного окна.
+    def create_toggle_button(self, text):
+        button = QPushButton(text)
+        button.setCheckable(True)
+        button.setChecked(True)
+        button.setFont(QFont("Segoe UI", 11))
+        button.setStyleSheet("""
+            QPushButton {
+                padding: 10px;
+                text-align: left;
+                border-radius: 5px;
+            }
+            QPushButton:checked {
+                background-color: #4a6da7;
+                color: white;
+            }
+        """)
+        button.clicked.connect(self.update_button_styles)
+        return button
 
-        # Инициализируем булевы переменные для отслеживания того, какие типы символов выбраны.
-        self.use_uppercase = False
-        self.use_lowercase = False
-        self.use_digits = False
-        self.use_special = False
+    def update_button_styles(self):
+        self.use_uppercase = self.uppercase_button.isChecked()
+        self.use_lowercase = self.lowercase_button.isChecked()
+        self.use_digits = self.digits_button.isChecked()
+        self.use_special = self.special_button.isChecked()
 
     def generate_password(self):
-        """
-        Генерируем пароль на основе выбранных критериев (длина и типы символов).
-        """
-        length = self.length_input.value()  # Получаем длину пароля из спинбокса.
+        length = self.length_input.value()
 
-        # Проверяем, выбран ли хотя бы один тип символов. Если нет, выводим сообщение.
         if not (self.use_uppercase or self.use_lowercase or self.use_digits or self.use_special):
             self.password_display.setText("Выберите хотя бы одну опцию!")
             return
 
-        characters = ''  # Пустая строку для хранения разрешенных символов.
-        # Добавляем символы в строку 'characters' в зависимости от выбранных опций.
+        characters = ''
         if self.use_uppercase: characters += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
         if self.use_lowercase: characters += 'abcdefghijklmnopqrstuvwxyz'
         if self.use_digits: characters += '0123456789'
         if self.use_special: characters += '!@#$%^&*'
 
-        # Генерируем пароль, случайным образом выбирая символы из строки 'characters'.
         password = ''.join(random.choice(characters) for _ in range(length))
-        self.password_display.setText(password)  # Отображаем сгенерированный пароль в поле.
+        self.password_display.setText(password)
 
     def copy_to_clipboard(self):
-        """
-        Копирует сгенерированный пароль в буфер обмена и сохраняет его в базу данных вместе с URL (если он указан).
-        """
         password = self.password_display.text()
         if password:
-            pyperclip.copy(password)  # Копируем пароль в буфер обмена.
-            url = self.url_input.text()  # Получаем URL из поля ввода.
-            # Сохраняем пароль и URL (или "-", если URL не указан) в базу данных.
+            pyperclip.copy(password)
+            url = self.url_input.text()
             if url:
                 self.save_to_database(password, url)
             else:
                 self.save_to_database(password, '-')
 
-            # Показываем сообщение, подтверждающее, что пароль скопирован.
-            QMessageBox.information(self, "Скопировано", "Пароль скопирован в буфер обмена!")
+            # Красивое всплывающее сообщение
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle("Успешно")
+            msg.setText("Пароль скопирован в буфер обмена!")
+            msg.setStyleSheet("""
+                QMessageBox {
+                    background-color: #2b2b2b;
+                }
+                QLabel {
+                    color: #e0e0e0;
+                }
+            """)
+            msg.exec()
         else:
-            # Показываем предупреждение, если нет пароля для копирования.
             QMessageBox.warning(self, "Ошибка", "Нет пароля для копирования!")
 
     def save_to_database(self, password, url):
-        """
-        Сохраняет переданный пароль и URL в базу данных 'passwords_database.db'.
-        """
         try:
             conn = sqlite3.connect('passwords_database.db')
             cur = conn.cursor()
-            # Выполняем SQL-запрос INSERT, чтобы добавить пароль и URL в таблицу 'passwords'.
             cur.execute("INSERT INTO passwords (password, url) VALUES (?, ?)", (password, url))
             conn.commit()
         except sqlite3.Error as e:
-            QMessageBox.critical(self, "Database Error", f"An error occurred: {e}")
+            QMessageBox.critical(self, "Ошибка базы данных", f"Произошла ошибка: {e}")
         finally:
-            # Гарантируем, что соединение с базой данных будет закрыто, даже если произошла ошибка.
-            if 'conn' in locals() and conn: conn.close()
-
-    def uppercase_toggle(self):
-        """Переключает использование заглавных букв и обновляет стиль кнопки."""
-        self.use_uppercase = not self.use_uppercase
-        # Обновляем стиль кнопки, чтобы указать, выбрана она (зеленый) или нет (светло-синий).
-        self.uppercase_button.setStyleSheet(
-            f"background-color: {'green' if self.use_uppercase else 'lightblue'}; QPushButton "
-            f"{{ padding: 15px; font-size: 16px; }}; {'color: black;' if not self.use_uppercase else ''}")
-
-    def lowercase_toggle(self):
-        """Переключает использование строчных букв и обновляет стиль кнопки."""
-        self.use_lowercase = not self.use_lowercase
-        self.lowercase_button.setStyleSheet(
-            f"background-color: {'green' if self.use_lowercase else 'lightblue'}; QPushButton "
-            f"{{ padding: 15px; font-size: 16px; }}; {'color: black;' if not self.use_lowercase else ''}")
-
-    def digits_toggle(self):
-        """Переключает использование цифр и обновляет стиль кнопки."""
-        self.use_digits = not self.use_digits
-        self.digits_button.setStyleSheet(
-            f"background-color: {'green' if self.use_digits else 'lightblue'}; QPushButton "
-            f"{{ padding: 15px; font-size: 16px; }}; {'color: black;' if not self.use_digits else ''}")
-
-    def special_toggle(self):
-        """Переключает использование специальных символов и обновляет стиль кнопки."""
-        self.use_special = not self.use_special
-        self.special_button.setStyleSheet(
-            f"background-color: {'green' if self.use_special else 'lightblue'}; QPushButton "
-            f"{{ padding: 15px; font-size: 16px; }}; {'color: black;' if not self.use_special else ''}")
+            if 'conn' in locals() and conn:
+                conn.close()
 
 
 class PasswordManager(QWidget):
-    """
-    Этот класс представляет собой часть приложения, отвечающую за управление паролями.
-    Он отображает сохраненные пароли и связанные с ними URL из базы данных в таблице.
-    """
-
     def __init__(self):
         super().__init__()
         self.initUI()
 
     def initUI(self):
-        """
-        Настраивает пользовательский интерфейс для менеджера паролей, включая таблицу
-        для отображения паролей и кнопку для обновления данных в базе данных.
-        """
-        self.setWindowTitle("Password Manager")
-        layout = QVBoxLayout(self)
+        self.setWindowTitle("Менеджер паролей")
+        self.setMinimumSize(600, 400)
 
-        # Создаем таблицу для отображения паролей
+        # Стиль для виджета
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #2b2b2b;
+                color: #e0e0e0;
+                font-family: 'Segoe UI';
+            }
+            QTableWidget {
+                background-color: #3c3f41;
+                border: 1px solid #555;
+                gridline-color: #555;
+                font-size: 17px;
+            }
+            QHeaderView::section {
+                background-color: #3c3f41;
+                padding: 5px;
+                border: 1px solid #555;
+            }
+            QTableWidget::item {
+                padding: 5px;
+            }
+            QTableWidget::item:selected {
+                background-color: #4a6da7;
+                color: white;
+            }
+            QPushButton {
+                background-color: #3c3f41;
+                border: 1px solid #555;
+                border-radius: 4px;
+                padding: 8px;
+                min-width: 100px;
+                color: #e0e0e0;
+            }
+            QPushButton:hover {
+                background-color: #4e5254;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(15)
+
+        # Заголовок
+        title = QLabel("Менеджер паролей")
+        title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet("color: #6d9eeb;")
+        layout.addWidget(title)
+
+        # Таблица
         self.table = QTableWidget()
-        self.table.setColumnCount(3)  # Устанавливаем 3 столбца: ID, Пароль, URL
-        self.table.setHorizontalHeaderLabels(["ID", "Password", "URL"])
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["ID", "Пароль", "URL"])
         self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectItems)
-        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection) # Разрешаем выделение только одной ячейки
-        self.table.cellClicked.connect(self.on_cell_clicked) # Подключаем сигнал нажатия на ячейку к функции копирования
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.table.cellClicked.connect(self.on_cell_clicked)
+        self.table.setStyleSheet("""
+            QTableWidget {
+                border-radius: 5px;
+            }
+        """)
         layout.addWidget(self.table)
 
-        # Создаем кнопку для обновления данных из базы данных
-        self.refresh_button = QPushButton("Обновить базу данных", self)
+        # Кнопка обновления
+        self.refresh_button = QPushButton("Обновить")
+        self.refresh_button.setFont(QFont("Segoe UI", 12))
         self.refresh_button.clicked.connect(self.load_data)
-        self.refresh_button.setStyleSheet("QPushButton { padding: 10px; font-size: 14px; }")
         layout.addWidget(self.refresh_button)
 
-        self.setLayout(layout)  # Устанавливаем макет для виджета
-        self.init_database()  # Инициализируем базу данных (создаем таблицу, если она не существует)
-        self.load_data()  # Загружаем данные из базы данных в таблицу
+        self.init_database()
+        self.load_data()
 
     def on_cell_clicked(self, row, column):
-        """
-        Обрабатывает нажатия на ячейки в таблице. Копирует содержимое нажатой ячейки (пароль или URL) в буфер обмена.
-        """
         item = self.table.item(row, column)
         if item is not None:
-            if column == 1: # Если нажат столбец "Пароль"
-                pyperclip.copy(item.text()) # Копируем пароль в буфер обмена
-                QMessageBox.information(self, "Copied", "Password copied to clipboard!")
-            elif column == 2:  # Если нажат столбец "URL"
-                pyperclip.copy(item.text()) # Копируем URL в буфер обмена
-                QMessageBox.information(self, "Copied", "URL copied to clipboard!")
+            text = item.text()
+            pyperclip.copy(text)
+
+            # Создаем красивый тултип
+            tooltip = QLabel(self)
+            tooltip.setText("Скопировано!" if column == 1 else "URL скопирован!")
+            tooltip.setStyleSheet("""
+                QLabel {
+                    background-color: #4a6da7;
+                    color: white;
+                    padding: 5px 10px;
+                    border-radius: 4px;
+                }
+            """)
+            tooltip.adjustSize()
+
+            # Позиционируем тултип рядом с курсором
+            pos = self.table.viewport().mapToGlobal(self.table.visualItemRect(item).topLeft())
+            tooltip.move(pos.x(), pos.y() - 30)
+            tooltip.show()
+
+            # Убираем тултип через 1 секунду
+            QtWidgets.QTimer.singleShot(1000, tooltip.deleteLater)
 
     def init_database(self):
-        """
-        Инициализирует базу данных SQLite. Создает таблицу 'passwords', если она не существует,
-        и вставляет две начальные записи, если таблица пуста.
-        """
         try:
             conn = sqlite3.connect('passwords_database.db')
             cur = conn.cursor()
-            cur.execute('''CREATE TABLE IF NOT EXISTS passwords (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            password TEXT NOT NULL, url TEXT)''')
+            cur.execute('''CREATE TABLE IF NOT EXISTS passwords 
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          password TEXT NOT NULL, 
+                          url TEXT)''')
             cur.execute("SELECT COUNT(*) FROM passwords")
             if cur.fetchone()[0] == 0:
                 cur.execute("INSERT INTO passwords (password, url) VALUES (?, ?)",
                             ("yDswHDDO7ppxvn$WAuA9!UScDIXoWbJ", "https://lmarena.ai/"))
                 cur.execute("INSERT INTO passwords (password, url) VALUES (?, ?)",
                             ("9is@^x2mc!63ttP*k8oiARaJ", "yandex.lyceym.ru"))
-                conn.commit()  # Фиксируем изменения
-
+                conn.commit()
         except sqlite3.Error as e:
-            # Обрабатываем любые ошибки базы данных
-            QMessageBox.critical(self, "Database Error", f"An error occurred: {e}")
+            QMessageBox.critical(self, "Ошибка базы данных", f"Произошла ошибка: {e}")
         finally:
-            # Закрываем соединение
-            if 'conn' in locals() and conn: conn.close()
+            if 'conn' in locals() and conn:
+                conn.close()
 
     def load_data(self):
-        """
-        Загружает данные из таблицы 'passwords' в базе данных и заполняет ими виджет таблицы.
-        Делает ячейки таблицы нередактируемыми и изменяет размеры столбцов.
-        """
         try:
             conn = sqlite3.connect('passwords_database.db')
             cur = conn.cursor()
             result = cur.execute("SELECT * FROM passwords")
             data = result.fetchall()
 
-            self.table.setRowCount(len(data))  # Устанавливаем количество строк в таблице
+            self.table.setRowCount(len(data))
+            self.table.setColumnCount(3)
 
-            # Заполняем таблицу полученными данными
             for row_num, row_data in enumerate(data):
                 for col_num, value in enumerate(row_data):
-                    item = QTableWidgetItem(str(value))  # Создаем элемент таблицы с данными
-                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)  # Делаем элемент нередактируемым
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter) #выравниваем текст по центру ячейки
-                    self.table.setItem(row_num, col_num, item)  # Устанавливаем элемент в таблицу
+                    item = QTableWidgetItem(str(value))
+                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            self.table.resizeColumnsToContents()  # Подгоняем ширину столбцов под содержимое
-            if self.table.columnWidth(1) < 200: #если столбец с паролем слишком узкий, задаем минимальную ширину
+                    # Разные цвета для разных столбцов
+                    if col_num == 1:  # Пароль
+                        item.setForeground(QColor("#6d9eeb"))
+                    elif col_num == 2:  # URL
+                        item.setForeground(QColor("#a5c261"))
+
+                    self.table.setItem(row_num, col_num, item)
+
+            self.table.resizeColumnsToContents()
+            if self.table.columnWidth(1) < 200:
                 self.table.setColumnWidth(1, 200)
 
         except sqlite3.Error as e:
-            # Обрабатываем ошибки базы данных
-            QMessageBox.critical(self, "Database Error", f"An error occurred: {e}")
+            QMessageBox.critical(self, "Ошибка базы данных", f"Произошла ошибка: {e}")
         finally:
-            # Закрываем соединение
-            if 'conn' in locals() and conn: conn.close()
+            if 'conn' in locals() and conn:
+                conn.close()
 
 
-class Example(QWidget):
-    """
-    Этот класс является главным окном приложения. Он объединяет виджеты PasswordGeneratorApp
-    и PasswordManager, а также несколько других примеров кнопок.
-    """
-
+class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
 
     def initUI(self):
-        self.setGeometry(300, 300, 1100, 550)
-        self.setWindowTitle('Генератор паролей')
+        self.setWindowTitle('Менеджер паролей')
+        self.setGeometry(200, 100, 1000, 600)
+
+        # Темная тема для всего приложения
+        dark_palette = QPalette()
+        dark_palette.setColor(QPalette.ColorRole.Window, QColor(43, 43, 43))
+        dark_palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.Base, QColor(35, 35, 35))
+        dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
+        dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(109, 158, 235))
+        dark_palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.black)
+        QApplication.setPalette(dark_palette)
+
         main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # Создаем контейнер для кнопок в левой части со стилизацией
-        button_container = QWidget()
-        button_container.setStyleSheet(
-            "background-color: lightblue; border: 2px solid black; padding: 10px; border-radius: 20px;")
-        button_layout = QVBoxLayout(button_container)
-        button_container.setFixedWidth(200)
-        main_layout.addWidget(button_container)
-        button_layout.addSpacing(50)
+        # Боковая панель
+        sidebar = QFrame()
+        sidebar.setFrameShape(QFrame.Shape.StyledPanel)
+        sidebar.setStyleSheet("""
+            QFrame {
+                background-color: #252525;
+                border-right: 1px solid #444;
+            }
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                text-align: left;
+                padding: 15px 20px;
+                font-size: 14px;
+                color: #e0e0e0;
+            }
+            QPushButton:hover {
+                background-color: #3c3f41;
+            }
+            QPushButton:pressed {
+                background-color: #4a6da7;
+            }
+        """)
+        sidebar.setFixedWidth(200)
 
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setSpacing(0)
 
-        self.btn1 = QPushButton('Хранилище паролей', self)
-        self.btn1.setStyleSheet(
-            "background-color: lightgreen; border: 2px solid; padding: 10px; color: black; border-radius: 20px")
-        self.btn1.clicked.connect(self.on_btn1_click)
-        button_layout.addWidget(self.btn1)
-        button_layout.addSpacing(30)
+        # Логотип
+        logo = QLabel("Password Manager")
+        logo.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setStyleSheet("""
+            QLabel {
+                color: #6d9eeb;
+                padding: 20px 0;
+                border-bottom: 1px solid #444;
+            }
+        """)
+        sidebar_layout.addWidget(logo)
 
+        # Кнопки навигации
+        self.btn_generator = QPushButton("Генератор паролей")
+        self.btn_generator.setIcon(QApplication.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_FileIcon))
+        self.btn_generator.clicked.connect(self.show_generator)
 
-        self.btn2 = QPushButton("Хранилище заметок", self)
-        self.btn2.setStyleSheet(
-            "background-color: lightgreen; border: 2px solid; padding: 10px; color: black; border-radius: 20px")
-        self.btn2.clicked.connect(self.on_btn2_click)
-        button_layout.addWidget(self.btn2)
-        button_layout.addSpacing(20)
+        self.btn_manager = QPushButton("Хранилище паролей")
+        self.btn_manager.setIcon(QApplication.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_DirIcon))
+        self.btn_manager.clicked.connect(self.show_manager)
 
+        self.btn_notes = QPushButton("Хранилище заметок")
+        self.btn_notes.setIcon(
+            QApplication.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView))
+        self.btn_notes.clicked.connect(self.show_notes)
 
-        self.btn3 = QPushButton("Кнопка 3", self)
-        self.btn3.setStyleSheet("background-color: lightgreen; padding: 10px; color: black; border-radius: 20px")
-        self.btn3.clicked.connect(self.on_btn3_click)
-        button_layout.addWidget(self.btn3)
-        button_layout.addStretch(1)
+        sidebar_layout.addWidget(self.btn_generator)
+        sidebar_layout.addWidget(self.btn_manager)
+        sidebar_layout.addWidget(self.btn_notes)
+        sidebar_layout.addStretch()
 
-        # Создаем экземпляр PasswordManager и добавляем его в основной макет
-        self.password_manager = PasswordManager()
-        main_layout.addWidget(self.password_manager)
+        # Основная область
+        self.stack = QtWidgets.QStackedWidget()
 
-        # Создаем экземпляр PasswordGeneratorApp и добавляем его в основной макет
+        # Создаем и добавляем виджеты
         self.password_generator = PasswordGeneratorApp()
-        main_layout.addWidget(self.password_generator)
+        self.password_manager = PasswordManager()
 
-    def on_btn1_click(self):
-        file_path = "Хранилище.txt"
-        if os.path.exists(file_path):
-            os.startfile(file_path)
-        else:
-            QMessageBox.information(self, "Файл не найден", "Файл не найден")
-    def on_btn2_click(self):
-        QMessageBox.information(self, "Хранилище заметок", "Хранилище заметок")
+        self.stack.addWidget(self.password_generator)
+        self.stack.addWidget(self.password_manager)
 
-    def on_btn3_click(self):
-        QMessageBox.information(self, "Кнопка номер 3", "Кнопка номер 3")
+        # Добавляем виджеты в основной макет
+        main_layout.addWidget(sidebar)
+        main_layout.addWidget(self.stack)
+
+        # Показываем генератор по умолчанию
+        self.show_generator()
+
+    def show_generator(self):
+        self.stack.setCurrentIndex(0)
+        self.btn_generator.setStyleSheet("background-color: #4a6da7;")
+        self.btn_manager.setStyleSheet("background-color: transparent;")
+        self.btn_notes.setStyleSheet("background-color: transparent;")
+
+    def show_manager(self):
+        self.stack.setCurrentIndex(1)
+        self.password_manager.load_data()
+        self.btn_generator.setStyleSheet("background-color: transparent;")
+        self.btn_manager.setStyleSheet("background-color: #4a6da7;")
+        self.btn_notes.setStyleSheet("background-color: transparent;")
+
+    def show_notes(self):
+        QMessageBox.information(self, "Хранилище заметок", "Эта функция в разработке")
+        self.btn_generator.setStyleSheet("background-color: transparent;")
+        self.btn_manager.setStyleSheet("background-color: transparent;")
+        self.btn_notes.setStyleSheet("background-color: #4a6da7;")
 
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    ex = Example()
-    ex.show()
+
+    # Устанавливаем стиль Fusion для более современного вида
+    app.setStyle('Fusion')
+
+    window = MainWindow()
+    window.show()
     sys.exit(app.exec())
